@@ -141,8 +141,9 @@ async function main(): Promise<void> {
       if (!tex) continue;
 
       let scale = assets.scale(spriteName, IMP.scale);
-      if (e.state === 'dead' && tex === assets.get('enemy_imp')) {
-        scale *= Math.max(0.3, e.deathTimer / 0.5);
+      if (e.state === 'dead') {
+        // Reduz o tamanho de QUALQUER sprite de morte em 30% e aplica o encolhimento da animacao
+        scale *= Math.max(0.3, e.deathTimer / 0.5) * 0.7;
       }
       
       billboards.push({ x: e.x, y: e.y, texture: tex, scale, vOffset: 0, tintRed: e.hurtTimer > 0 });
