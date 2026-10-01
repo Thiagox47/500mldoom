@@ -1,0 +1,9 @@
+{
+  "_nota": "Coloque seus PNGs em public/sprites/ com os nomes abaixo. Sprites ausentes usam placeholders gerados por codigo. 'scale' e opcional (altura do sprite em tiles no mundo).",
+  "sprites": [
+    { "name": "enemy_imp", "file": "sprites/enemy_imp.png" },
+    { "name": "item_health", "file": "sprites/item_health.png" },
+    { "name": "item_ammo", "file": "sprites/item_ammo.png" },
+    { "name": "weapon_shotgun", "file": "sprites/weapon_shotgun.png" }
+  ]
+}
