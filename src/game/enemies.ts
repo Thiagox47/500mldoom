@@ -6,7 +6,7 @@ import type { Enemy, EnemyDef } from '../types';
 export const IMP: EnemyDef = { health: 60, speed: 1.7, damage: 9, scale: 0.78, attackRange: 1.4 };
 
 const RADIUS = 0.25;
-const BOT_SKINS = ['bot1', 'bot2', 'bot3']; // Adicione mais skins de bots aqui
+const BOT_SKINS = ['botpadrao', 'bot01']; // Skins ativas no modo mata-mata
 
 export class Enemies {
   list: Enemy[] = [];
