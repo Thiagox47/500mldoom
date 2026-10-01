@@ -6,6 +6,7 @@ import type { Enemy, EnemyDef } from '../types';
 export const IMP: EnemyDef = { health: 60, speed: 1.7, damage: 9, scale: 0.78, attackRange: 1.4 };
 
 const RADIUS = 0.25;
+const BOT_SKINS = ['bot1', 'bot2', 'bot3']; // Adicione mais skins de bots aqui
 
 export class Enemies {
   list: Enemy[] = [];
@@ -30,6 +31,8 @@ export class Enemies {
         attackTimer: 0,
         cooldown: 0,
         deathTimer: 0,
+        skin: BOT_SKINS[Math.floor(Math.random() * BOT_SKINS.length)],
+        animTime: Math.random() * 10,
       });
     }
   }
@@ -41,6 +44,7 @@ export class Enemies {
 
   update(dt: number, player: Player, def: EnemyDef, onHitPlayer: (dmg: number) => void): void {
     for (const e of this.list) {
+      e.animTime += dt;
       if (e.state === 'dead') {
         e.deathTimer -= dt;
         continue;

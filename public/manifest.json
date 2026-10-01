@@ -4,6 +4,33 @@
     { "name": "enemy_imp", "file": "sprites/enemy_imp.png" },
     { "name": "item_health", "file": "sprites/item_health.png" },
     { "name": "item_ammo", "file": "sprites/item_ammo.png" },
-    { "name": "weapon_shotgun", "file": "sprites/weapon_shotgun.png" }
+    { "name": "weapon_shotgun", "file": "sprites/weapon_shotgun.png" },
+    
+    { "name": "bot1_idle", "file": "sprites/bot1/idle.png" },
+    { "name": "bot1_walk1", "file": "sprites/bot1/walk1.png" },
+    { "name": "bot1_walk2", "file": "sprites/bot1/walk2.png" },
+    { "name": "bot1_walk3", "file": "sprites/bot1/walk3.png" },
+    { "name": "bot1_walk4", "file": "sprites/bot1/walk4.png" },
+    { "name": "bot1_attack", "file": "sprites/bot1/attack.png" },
+    { "name": "bot1_hurt", "file": "sprites/bot1/hurt.png" },
+    { "name": "bot1_dead", "file": "sprites/bot1/dead.png" },
+
+    { "name": "bot2_idle", "file": "sprites/bot2/idle.png" },
+    { "name": "bot2_walk1", "file": "sprites/bot2/walk1.png" },
+    { "name": "bot2_walk2", "file": "sprites/bot2/walk2.png" },
+    { "name": "bot2_walk3", "file": "sprites/bot2/walk3.png" },
+    { "name": "bot2_walk4", "file": "sprites/bot2/walk4.png" },
+    { "name": "bot2_attack", "file": "sprites/bot2/attack.png" },
+    { "name": "bot2_hurt", "file": "sprites/bot2/hurt.png" },
+    { "name": "bot2_dead", "file": "sprites/bot2/dead.png" },
+
+    { "name": "bot3_idle", "file": "sprites/bot3/idle.png" },
+    { "name": "bot3_walk1", "file": "sprites/bot3/walk1.png" },
+    { "name": "bot3_walk2", "file": "sprites/bot3/walk2.png" },
+    { "name": "bot3_walk3", "file": "sprites/bot3/walk3.png" },
+    { "name": "bot3_walk4", "file": "sprites/bot3/walk4.png" },
+    { "name": "bot3_attack", "file": "sprites/bot3/attack.png" },
+    { "name": "bot3_hurt", "file": "sprites/bot3/hurt.png" },
+    { "name": "bot3_dead", "file": "sprites/bot3/dead.png" }
   ]
 }

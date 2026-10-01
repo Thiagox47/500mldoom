@@ -123,10 +123,28 @@ async function main(): Promise<void> {
 
     const billboards: Billboard[] = [];
     for (const e of enemies.list) {
-      const tex = assets.get('enemy_imp');
+      let spriteName = `${e.skin}_idle`;
+      if (e.state === 'dead') {
+        spriteName = `${e.skin}_dead`;
+      } else if (e.hurtTimer > 0) {
+        spriteName = `${e.skin}_hurt`;
+      } else if (e.state === 'attack') {
+        spriteName = `${e.skin}_attack`;
+      } else if (e.state === 'chase') {
+        const frame = Math.floor(e.animTime * 5) % 4;
+        spriteName = `${e.skin}_walk${frame + 1}`; // walk1, walk2, walk3, walk4
+      }
+
+      let tex = assets.get(spriteName);
+      if (!tex) tex = assets.get(`${e.skin}_idle`);
+      if (!tex) tex = assets.get('enemy_imp');
       if (!tex) continue;
-      let scale = assets.scale('enemy_imp', IMP.scale);
-      if (e.state === 'dead') scale *= Math.max(0.3, e.deathTimer / 0.5);
+
+      let scale = assets.scale(spriteName, IMP.scale);
+      if (e.state === 'dead' && tex === assets.get('enemy_imp')) {
+        scale *= Math.max(0.3, e.deathTimer / 0.5);
+      }
+      
       billboards.push({ x: e.x, y: e.y, texture: tex, scale, vOffset: 0, tintRed: e.hurtTimer > 0 });
     }
     for (const item of items.list) {

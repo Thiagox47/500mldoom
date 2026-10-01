@@ -31,6 +31,8 @@ export interface Enemy {
   attackTimer: number;
   cooldown: number;
   deathTimer: number;
+  skin: string;
+  animTime: number;
 }
 
 export type ItemType = 'health' | 'ammo';
