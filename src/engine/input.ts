@@ -14,6 +14,7 @@ export class Input {
     window.addEventListener('blur', () => {
       this.keys.clear();
       this.firing = false;
+      this.unlock();
     });
     document.addEventListener('mousemove', (e) => {
       if (this.locked) this.mouseDX += e.movementX;
@@ -28,6 +29,14 @@ export class Input {
 
   get locked(): boolean {
     return document.pointerLockElement === this.canvas;
+  }
+
+  unlock(): void {
+    if (document.pointerLockElement) {
+      try {
+        document.exitPointerLock();
+      } catch {}
+    }
   }
 
   down(code: string): boolean {

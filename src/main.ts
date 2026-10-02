@@ -1,16 +1,16 @@
 import { Assets } from './engine/assets';
 import { renderBillboards, type Billboard } from './engine/billboard';
 import { Input } from './engine/input';
-import { renderFloorCeiling, renderWalls } from './engine/raycaster';
+import { renderFloorCeiling, renderWalls, isEntityInFov, getEntityRelativeAspect } from './engine/raycaster';
 import { Sfx } from './engine/sfx';
 import { Enemies, IMP } from './game/enemies';
-import { Hud, type KillFeedItem } from './game/hud';
+import { Hud, type KillFeedItem, type SpottedPing } from './game/hud';
 import { Items } from './game/items';
-import { ENEMY_SPAWNS, ITEM_SPAWNS, PLAYER_SPAWN, SPAWN_HOST, SPAWN_CLIENT, DEATHMATCH_SPAWNS, isWall } from './game/map';
+import { ENEMY_SPAWNS, ITEM_SPAWNS, PLAYER_SPAWN, DEATHMATCH_SPAWNS, isWall } from './game/map';
 import { Player } from './game/player';
 import { Spawner } from './game/spawner';
 import { hitscan, Weapon } from './game/weapons';
-import { MultiplayerNetwork } from './network/multiplayer';
+import { MultiplayerNetwork, type LobbyPlayer } from './network/multiplayer';
 import type { GameMode, ItemType } from './types';
 
 const W = 640;
@@ -67,6 +67,16 @@ async function main(): Promise<void> {
   const panelJoin = document.getElementById('panel-join') as HTMLElement;
   const panelCreate = document.getElementById('panel-create') as HTMLElement;
 
+  const mpHostPlayersCount = document.getElementById('mp-host-players-count') as HTMLElement;
+  const mpHostPlayersList = document.getElementById('mp-host-players-list') as HTMLElement;
+  const mpJoinInputSection = document.getElementById('mp-join-input-section') as HTMLElement;
+  const mpClientLobby = document.getElementById('mp-client-lobby') as HTMLElement;
+  const mpClientCodeDisplay = document.getElementById('mp-client-code-display') as HTMLElement;
+  const mpClientPlayersCount = document.getElementById('mp-client-players-count') as HTMLElement;
+  const mpClientPlayersList = document.getElementById('mp-client-players-list') as HTMLElement;
+  const mpClientStatus = document.getElementById('mp-client-status') as HTMLElement;
+  const btnClientJoinInprogress = document.getElementById('btn-client-join-inprogress') as HTMLButtonElement;
+
   const pauseStats = document.getElementById('pause-stats') as HTMLElement;
   const pauseModeBadge = document.getElementById('pause-mode-badge') as HTMLElement;
   const gameoverStats = document.getElementById('gameover-stats') as HTMLElement;
@@ -76,6 +86,9 @@ async function main(): Promise<void> {
   let playerSkin = 'bot02';
   const killFeed: KillFeedItem[] = [];
 
+  // Pings de radar (ponto vermelho por 3s quando avistado no campo de visão)
+  const spottedPings = new Map<string, SpottedPing>();
+
   let kills = 0;
   let damageFlash = 0;
   let pickupFlash = 0;
@@ -84,12 +97,21 @@ async function main(): Promise<void> {
   let respawnCountdown = 0;
   let spawnShieldTimer = 0;
 
+  const releaseLock = (): void => {
+    try {
+      if (document.pointerLockElement) {
+        document.exitPointerLock();
+      }
+    } catch {}
+  };
+
   const showScreen = (name: keyof typeof screens | null): void => {
     if (!name) {
       overlay.style.display = 'none';
       clickToFocusBanner.style.display = !input.locked && inGame ? 'block' : 'none';
       return;
     }
+    releaseLock();
     overlay.style.display = 'flex';
     clickToFocusBanner.style.display = 'none';
     for (const key of Object.keys(screens) as (keyof typeof screens)[]) {
@@ -105,27 +127,72 @@ async function main(): Promise<void> {
     mpStatusAlert.textContent = msg;
   };
 
+  const updateLobbyUi = (players: LobbyPlayer[]): void => {
+    const countText = `${players.length} jogador${players.length > 1 ? 'es' : ''}`;
+    if (mpHostPlayersCount) mpHostPlayersCount.textContent = countText;
+    if (mpClientPlayersCount) mpClientPlayersCount.textContent = countText;
+
+    const renderList = (container: HTMLElement) => {
+      if (!container) return;
+      container.innerHTML = '';
+      for (const p of players) {
+        const isYou = p.id === network.myId;
+        const item = document.createElement('div');
+        item.className = 'player-item';
+        item.innerHTML = `
+          <div class="player-item-name">
+            <span>${p.isHost ? '👑' : '🎮'}</span>
+            <span>${p.name}</span>
+          </div>
+          <div style="display: flex; gap: 4px; align-items: center;">
+            ${isYou ? '<span class="player-badge badge-you">Você</span>' : ''}
+            <span class="player-badge ${p.isHost ? 'badge-host' : 'badge-guest'}">${p.isHost ? 'Host' : 'Convidado'}</span>
+          </div>
+        `;
+        container.appendChild(item);
+      }
+    };
+
+    if (mpHostPlayersList) renderList(mpHostPlayersList);
+    if (mpClientPlayersList) renderList(mpClientPlayersList);
+
+    if (network.isHost && btnHostEnter) {
+      btnHostEnter.textContent = `⚔️ INICIAR PARTIDA (${players.length} JOGADOR${players.length > 1 ? 'ES' : ''})`;
+      btnHostEnter.style.display = 'block';
+    }
+  };
+
   const respawnPlayer = (): void => {
     if (!inGame) return;
 
-    // Seleciona spawn point seguro mais distante do adversario
+    // Seleciona spawn point seguro com a maior distância mínima de qualquer oponente
     let bestSpawn = DEATHMATCH_SPAWNS[0];
     let bestDist = -1;
-    const targetX =
-      network.connected && network.remotePlayer && network.remotePlayer.state !== 'dead'
-        ? network.remotePlayer.x
-        : (gameMode === 'multiplayer' ? 12.0 : PLAYER_SPAWN.x);
-    const targetY =
-      network.connected && network.remotePlayer && network.remotePlayer.state !== 'dead'
-        ? network.remotePlayer.y
-        : (gameMode === 'multiplayer' ? 12.0 : PLAYER_SPAWN.y);
 
-    for (const sp of DEATHMATCH_SPAWNS) {
-      const d = Math.hypot(sp.x - targetX, sp.y - targetY);
-      if (d > bestDist) {
-        bestDist = d;
-        bestSpawn = sp;
+    const opponents: { x: number; y: number }[] = [];
+    if (network.connected) {
+      for (const rp of network.remotePlayerList) {
+        if (rp.state !== 'dead' && rp.health > 0) opponents.push({ x: rp.x, y: rp.y });
       }
+    }
+    for (const e of enemies.list) {
+      if (e.state !== 'dead') opponents.push({ x: e.x, y: e.y });
+    }
+
+    if (opponents.length > 0) {
+      for (const sp of DEATHMATCH_SPAWNS) {
+        let minDist = Infinity;
+        for (const opp of opponents) {
+          const d = Math.hypot(sp.x - opp.x, sp.y - opp.y);
+          if (d < minDist) minDist = d;
+        }
+        if (minDist > bestDist) {
+          bestDist = minDist;
+          bestSpawn = sp;
+        }
+      }
+    } else {
+      bestSpawn = DEATHMATCH_SPAWNS[Math.floor(Math.random() * DEATHMATCH_SPAWNS.length)];
     }
 
     player.reset(bestSpawn.x, bestSpawn.y, bestSpawn.angle);
@@ -159,14 +226,14 @@ async function main(): Promise<void> {
   };
 
   const reset = (): void => {
+    kills = 0; // Garante que a contagem de frags sempre comece do zero
     const botMode = mpBotModeSelect?.value || 'duel';
+    spottedPings.clear();
 
     if (gameMode === 'multiplayer') {
-      if (network.isHost) {
-        player.reset(SPAWN_HOST.x, SPAWN_HOST.y, SPAWN_HOST.angle);
-      } else {
-        player.reset(SPAWN_CLIENT.x, SPAWN_CLIENT.y, SPAWN_CLIENT.angle);
-      }
+      const myIdx = network.getPlayerIndex();
+      const spawn = DEATHMATCH_SPAWNS[myIdx % DEATHMATCH_SPAWNS.length];
+      player.reset(spawn.x, spawn.y, spawn.angle);
 
       if (botMode === 'duel') {
         enemies.reset([], IMP);
@@ -203,6 +270,8 @@ async function main(): Promise<void> {
     sfx.init();
     sfx.menuConfirm();
     gameMode = mode;
+    kills = 0; // Zera frags ao iniciar qualquer modo (evita vazamento de singleplayer para multiplayer)
+    killFeed.length = 0; // Limpa feed de eliminações de partidas anteriores
     if (name) playerName = name;
     if (skin) playerSkin = skin;
     inGame = true;
@@ -210,7 +279,7 @@ async function main(): Promise<void> {
     showScreen(null);
     requestLock();
 
-    // Envia estado inicial para o amigo se conectado
+    // Envia estado inicial para todos os jogadores na sala
     if (network.connected) {
       network.sendState({
         x: player.x,
@@ -268,27 +337,21 @@ async function main(): Promise<void> {
       const randomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
       mpHostCodeDiv.textContent = 'CONECTANDO...';
       mpHostStatusDiv.textContent = '⏳ Registrando sala P2P na rede...';
-      btnHostEnter.style.display = 'none';
 
-      // Salva estado inicial antes de abrir sala
       const nick = mpPlayerNameInput.value.trim() || 'Jogador_500ml';
       const skin = mpPlayerSkinSelect.value || 'bot02';
-      network.localState = {
-        x: SPAWN_HOST.x,
-        y: SPAWN_HOST.y,
-        angle: SPAWN_HOST.angle,
-        health: 100,
-        skin,
-        name: nick,
-        state: 'idle',
-        frags: 0,
-      };
+      playerName = nick;
+      playerSkin = skin;
 
       network.createRoom(
         randomCode,
+        nick,
+        skin,
         (code) => {
           mpHostCodeDiv.textContent = code;
-          mpHostStatusDiv.textContent = '⏳ Sala aberta! Passe o código para seu amigo conectar...';
+          mpHostStatusDiv.textContent = '⏳ Sala aberta! Passe o código para seus amigos conectarem...';
+          btnHostEnter.style.display = 'block';
+          btnHostEnter.textContent = '⚔️ INICIAR PARTIDA (1 JOGADOR)';
         },
         (err) => {
           mpHostCodeDiv.textContent = 'ERRO';
@@ -298,10 +361,11 @@ async function main(): Promise<void> {
     }
   });
 
-  // Botão que surge para o Host entrar quando o amigo conecta
+  // Botão em que o Criador/Host decide quando iniciar a partida
   btnHostEnter?.addEventListener('click', () => {
     const nick = mpPlayerNameInput.value.trim() || 'Jogador_500ml';
     const skin = mpPlayerSkinSelect.value || 'bot02';
+    network.startGame();
     startGame('multiplayer', nick, skin);
   });
 
@@ -310,7 +374,7 @@ async function main(): Promise<void> {
     if (!network.roomCode) return;
     const url = `${window.location.origin}${window.location.pathname}?sala=${network.roomCode}`;
     navigator.clipboard.writeText(url).then(() => {
-      showAlert(`✓ Link copiado! Envie para seu amigo: ?sala=${network.roomCode}`);
+      showAlert(`✓ Link copiado! Envie para seus amigos: ?sala=${network.roomCode}`);
     }).catch(() => {
       showAlert(`Código da sala: ${network.roomCode}`);
     });
@@ -331,24 +395,20 @@ async function main(): Promise<void> {
     showAlert(`Conectando à sala ${code}... aguarde.`);
     sfx.init();
 
-    // Salva estado inicial do cliente
-    network.localState = {
-      x: SPAWN_CLIENT.x,
-      y: SPAWN_CLIENT.y,
-      angle: SPAWN_CLIENT.angle,
-      health: 100,
-      skin,
-      name: nick,
-      state: 'idle',
-      frags: 0,
-    };
-
     network.joinRoom(
       code,
+      nick,
+      skin,
       () => {
-        showAlert(`Conectado à sala ${code}! Entrando na arena...`);
-        // Dispara entrada imediata pelo clique do usuario
-        startGame('multiplayer', playerName, playerSkin);
+        showAlert(`Conectado à sala ${code}! Aguardando o Criador iniciar a partida...`);
+        if (mpJoinInputSection) mpJoinInputSection.style.display = 'none';
+        if (mpClientLobby) mpClientLobby.style.display = 'flex';
+        if (mpClientCodeDisplay) mpClientCodeDisplay.textContent = code;
+        if (btnClientJoinInprogress) btnClientJoinInprogress.style.display = 'none';
+        if (mpClientStatus) {
+          mpClientStatus.innerHTML = '⏳ Aguardando o Criador da sala iniciar a partida...';
+          mpClientStatus.style.color = '#38bdf8';
+        }
       },
       (err) => {
         showAlert(`Falha ao conectar: ${err}`, true);
@@ -356,29 +416,54 @@ async function main(): Promise<void> {
     );
   });
 
-  // Callbacks de Eventos de Rede P2P
-  network.onConnected = (remoteName) => {
+  // Callbacks de Eventos de Rede Multi-player
+  network.onLobbyUpdate = (players) => {
+    updateLobbyUi(players);
+  };
+
+  network.onGameInProgress = () => {
+    if (inGame) return;
+    if (mpClientStatus) {
+      mpClientStatus.innerHTML = '<span style="color:#fbbf24; font-weight:bold; font-size:12px;">⚔️ PARTIDA EM ANDAMENTO!</span><br><span style="color:#94a3b8; font-size:11px;">O criador já iniciou o combate. Você pode entrar agora mesmo!</span>';
+    }
+    if (btnClientJoinInprogress) {
+      btnClientJoinInprogress.style.display = 'block';
+      btnClientJoinInprogress.textContent = '⚡ ENTRAR NA PARTIDA (RECONECTAR)';
+    }
+    showAlert('⚔️ A partida nesta sala já está em andamento! Clique em "Entrar na Partida" para jogar.');
+  };
+
+  btnClientJoinInprogress?.addEventListener('click', () => {
+    sfx.init();
     sfx.menuConfirm();
-    showAlert(`🟢 Amigo conectado (${remoteName})!`);
+    const nick = mpPlayerNameInput.value.trim() || 'Jogador_500ml';
+    const skin = mpPlayerSkinSelect.value || 'bot02';
+    startGame('multiplayer', nick, skin);
+  });
 
-    if (network.isHost) {
-      mpHostStatusDiv.innerHTML = `<span style="color:#4ade80; font-weight:bold;">🟢 ${remoteName} conectou! Entrando na arena...</span>`;
-      btnHostEnter.style.display = 'block';
-      showAlert(`🟢 Amigo conectado! Entrando na partida...`);
-
-      // Auto-inicia partida no Host se estiver no lobby
-      setTimeout(() => {
-        if (!inGame) {
-          const nick = mpPlayerNameInput.value.trim() || 'Jogador_500ml';
-          const skin = mpPlayerSkinSelect.value || 'bot02';
-          startGame('multiplayer', nick, skin);
-        }
-      }, 1000);
+  network.onPlayerJoined = (remoteName) => {
+    sfx.menuSelect();
+    showAlert(`🟢 ${remoteName} entrou na sala!`);
+    if (network.isHost && mpHostStatusDiv) {
+      mpHostStatusDiv.innerHTML = `<span style="color:#4ade80;">🟢 ${remoteName} conectou! Clique em "Iniciar Partida" quando todos estiverem prontos.</span>`;
     }
   };
 
+  network.onPlayerLeft = (remoteName) => {
+    showAlert(`⚠️ ${remoteName} saiu da sala.`);
+    killFeed.unshift({ text: `⚠️ ${remoteName} desconectou.`, timer: 4 });
+  };
+
+  network.onStartGame = () => {
+    sfx.menuConfirm();
+    showAlert('🚀 O Criador iniciou a partida! Entrando na arena...');
+    const nick = mpPlayerNameInput.value.trim() || 'Jogador_500ml';
+    const skin = mpPlayerSkinSelect.value || 'bot02';
+    startGame('multiplayer', nick, skin);
+  };
+
   network.onDisconnected = () => {
-    killFeed.unshift({ text: '⚠️ O outro jogador desconectou!', timer: 4 });
+    killFeed.unshift({ text: '⚠️ Conexão com a sala encerrada.', timer: 4 });
   };
 
   network.onReceiveHit = (damage, from) => {
@@ -389,7 +474,7 @@ async function main(): Promise<void> {
     if (player.dead) {
       respawnCountdown = 2.5;
       sfx.enemyDie();
-      network.sendDie(from);
+      network.sendDie(network.myId, from);
       killFeed.unshift({ text: `☠️ ${from} eliminou você!`, timer: 4.5 });
     }
   };
@@ -404,25 +489,25 @@ async function main(): Promise<void> {
     if (killFeed.length > 4) killFeed.pop();
   };
 
-  network.onRemoteRespawn = (x, y) => {
-    if (network.remotePlayer) {
-      network.remotePlayer.x = x;
-      network.remotePlayer.y = y;
-      network.remotePlayer.health = 100;
-      network.remotePlayer.state = 'idle';
-    }
-    killFeed.unshift({ text: `⚡ ${network.remotePlayer?.name || 'Amigo'} renasceu na arena!`, timer: 3 });
+  network.onRemoteRespawn = (id, _x, _y) => {
+    const rp = network.remotePlayers.get(id);
+    const name = rp?.name || 'Um jogador';
+    killFeed.unshift({ text: `⚡ ${name} renasceu na arena!`, timer: 3 });
   };
 
   // Tela Principal
   document.getElementById('btn-start-single')?.addEventListener('click', () => {
     network.cleanup();
+    kills = 0;
     startGame('single');
   });
 
   document.getElementById('btn-open-multiplayer')?.addEventListener('click', () => {
     sfx.init();
     sfx.menuSelect();
+    kills = 0;
+    if (mpJoinInputSection) mpJoinInputSection.style.display = 'flex';
+    if (mpClientLobby) mpClientLobby.style.display = 'none';
     showScreen('multiplayer');
   });
 
@@ -434,6 +519,7 @@ async function main(): Promise<void> {
 
   document.getElementById('btn-play-offline-bots')?.addEventListener('click', () => {
     network.cleanup();
+    kills = 0;
     const nick = mpPlayerNameInput.value.trim() || 'Jogador_500ml';
     const skin = mpPlayerSkinSelect.value || 'bot02';
     startGame('multiplayer', nick, skin);
@@ -442,6 +528,8 @@ async function main(): Promise<void> {
   document.getElementById('btn-back-to-main-from-mp')?.addEventListener('click', () => {
     network.cleanup();
     sfx.menuSelect();
+    if (mpJoinInputSection) mpJoinInputSection.style.display = 'flex';
+    if (mpClientLobby) mpClientLobby.style.display = 'none';
     showScreen('main');
   });
 
@@ -462,6 +550,7 @@ async function main(): Promise<void> {
   });
 
   document.getElementById('btn-quit-to-main')?.addEventListener('click', () => {
+    releaseLock();
     network.cleanup();
     sfx.menuSelect();
     inGame = false;
@@ -475,6 +564,7 @@ async function main(): Promise<void> {
   });
 
   document.getElementById('btn-gameover-to-main')?.addEventListener('click', () => {
+    releaseLock();
     network.cleanup();
     sfx.menuSelect();
     inGame = false;
@@ -491,7 +581,7 @@ async function main(): Promise<void> {
       respawnCountdown = 2.5;
       sfx.enemyDie();
       if (network.connected) {
-        network.sendDie('Bot');
+        network.sendDie(network.myId, 'Bot');
       }
     }
   };
@@ -531,13 +621,33 @@ async function main(): Promise<void> {
     }
   });
 
+  // Libera o Pointer Lock e encerra conexão P2P ao fechar a página, mudar de aba ou perder o foco
+  const handleExitOrBlur = (): void => {
+    releaseLock();
+    if (network.connected) {
+      network.cleanup();
+    }
+  };
+
+  window.addEventListener('beforeunload', handleExitOrBlur);
+  window.addEventListener('pagehide', handleExitOrBlur);
+  window.addEventListener('unload', handleExitOrBlur);
+  window.addEventListener('blur', () => {
+    releaseLock();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      releaseLock();
+    }
+  });
+
   // Auto-fill do código da sala se vier por query string na URL (?sala=XXXX)
   const urlParams = new URLSearchParams(window.location.search);
   const roomParam = urlParams.get('sala') || urlParams.get('room');
   if (roomParam) {
     showScreen('multiplayer');
     if (mpJoinCodeInput) mpJoinCodeInput.value = roomParam.toUpperCase();
-    showAlert(`Código de sala "${roomParam.toUpperCase()}" preenchido! Digite seu apelido e clique em "Conectar e Jogar".`);
+    showAlert(`Código de sala "${roomParam.toUpperCase()}" preenchido! Digite seu apelido e clique em "Conectar e Entrar na Sala".`);
   }
 
   const update = (dt: number): void => {
@@ -615,10 +725,50 @@ async function main(): Promise<void> {
         });
       }
 
-      // Atualiza timers do remote player
-      if (network.remotePlayer) {
-        if (network.remotePlayer.hurtTimer > 0) network.remotePlayer.hurtTimer -= dt;
-        if (network.remotePlayer.attackTimer > 0) network.remotePlayer.attackTimer -= dt;
+      // Atualiza timers de todos os remote players
+      for (const rp of network.remotePlayerList) {
+        if (rp.hurtTimer > 0) rp.hurtTimer -= dt;
+        if (rp.attackTimer > 0) rp.attackTimer -= dt;
+      }
+    }
+
+    // Radar de Campo de Visão (FOV):
+    // Quando outro jogador aparece no campo de visão e sem parede bloqueando, gera um ponto vermelho no mapa por 3s
+    if (network.connected) {
+      for (const rp of network.remotePlayerList) {
+        if (rp.state !== 'dead' && rp.health > 0) {
+          if (isEntityInFov(player.x, player.y, player.angle, rp.x, rp.y)) {
+            spottedPings.set(rp.id, {
+              id: rp.id,
+              x: rp.x,
+              y: rp.y,
+              timer: 3.0,
+            });
+          }
+        }
+      }
+    }
+
+    // Bots também ativam o ponto vermelho se entrarem no campo de visão
+    enemies.list.forEach((e, idx) => {
+      if (e.state !== 'dead') {
+        if (isEntityInFov(player.x, player.y, player.angle, e.x, e.y)) {
+          const botId = e.id || `bot-${e.name || idx}`;
+          spottedPings.set(botId, {
+            id: botId,
+            x: e.x,
+            y: e.y,
+            timer: 3.0,
+          });
+        }
+      }
+    });
+
+    // Atualiza timers dos pontos vermelhos (remove após 3 segundos)
+    for (const [id, ping] of spottedPings.entries()) {
+      ping.timer -= dt;
+      if (ping.timer <= 0) {
+        spottedPings.delete(id);
       }
     }
 
@@ -642,38 +792,41 @@ async function main(): Promise<void> {
           network.sendShoot(player.x, player.y, player.dirX, player.dirY);
         }
 
-        // Verifica se acertou o amigo conectado via hitscan
-        let hitFriend = false;
-        if (network.connected && network.remotePlayer && network.remotePlayer.state !== 'dead' && network.remotePlayer.health > 0) {
-          const rp = network.remotePlayer;
-          for (let d = 0.4; d < 22; d += 0.06) {
-            const hx = player.x + player.dirX * d;
-            const hy = player.y + player.dirY * d;
-            if (isWall(hx, hy)) break;
-            const rx = hx - rp.x;
-            const ry = hy - rp.y;
-            if (rx * rx + ry * ry < 0.16) {
-              hitFriend = true;
-              break;
+        // Verifica se acertou algum jogador remoto conectado via hitscan
+        let hitRemotePlayer: (typeof network.remotePlayerList)[0] | null = null;
+        if (network.connected) {
+          for (const rp of network.remotePlayerList) {
+            if (rp.state === 'dead' || rp.health <= 0) continue;
+            for (let d = 0.4; d < 22; d += 0.06) {
+              const hx = player.x + player.dirX * d;
+              const hy = player.y + player.dirY * d;
+              if (isWall(hx, hy)) break;
+              const rx = hx - rp.x;
+              const ry = hy - rp.y;
+              if (rx * rx + ry * ry < 0.16) {
+                hitRemotePlayer = rp;
+                break;
+              }
             }
+            if (hitRemotePlayer) break;
           }
         }
 
-        if (hitFriend && network.remotePlayer) {
+        if (hitRemotePlayer) {
           sfx.hit();
           const dmg = 26 + Math.floor(Math.random() * 12);
-          network.sendHit(dmg, playerName);
-          network.remotePlayer.hurtTimer = 0.2;
-          network.remotePlayer.health -= dmg;
+          network.sendHit(hitRemotePlayer.id, dmg, playerName);
+          hitRemotePlayer.hurtTimer = 0.2;
+          hitRemotePlayer.health -= dmg;
 
-          if (network.remotePlayer.health <= 0) {
-            network.remotePlayer.health = 0;
-            network.remotePlayer.state = 'dead';
+          if (hitRemotePlayer.health <= 0) {
+            hitRemotePlayer.health = 0;
+            hitRemotePlayer.state = 'dead';
             kills++;
             sfx.enemyDie();
-            network.sendDie(playerName);
+            network.sendDie(hitRemotePlayer.id, playerName);
             killFeed.unshift({
-              text: `⚡ Você eliminou ${network.remotePlayer.name}! (+1 FRAG)`,
+              text: `⚡ Você eliminou ${hitRemotePlayer.name}! (+1 FRAG)`,
               timer: 4,
             });
             if (killFeed.length > 4) killFeed.pop();
@@ -710,41 +863,64 @@ async function main(): Promise<void> {
 
     const billboards: Billboard[] = [];
 
-    // Renderiza o amigo conectado em 3D no mapa!
-    if (network.connected && network.remotePlayer) {
-      const rp = network.remotePlayer;
-      let spriteName = `${rp.skin}_idle`;
-      if (rp.state === 'dead' || rp.health <= 0) {
-        spriteName = `${rp.skin}_dead`;
-      } else if (rp.hurtTimer > 0) {
-        spriteName = `${rp.skin}_hurt`;
-      } else if (rp.attackTimer > 0) {
-        spriteName = `${rp.skin}_attack`;
-      } else if (rp.state === 'walk') {
-        const frame = Math.floor(Date.now() / 150) % 4;
-        spriteName = `${rp.skin}_walk${frame + 1}`;
-      }
-
-      let tex = assets.get(spriteName) || assets.get(`${rp.skin}_idle`) || assets.get('bot02_idle') || assets.get('enemy_imp');
-      if (tex) {
-        let scale = assets.scale(spriteName, IMP.scale);
-        if (rp.state === 'dead' || rp.health <= 0) {
-          scale *= 0.55;
+    // Renderiza todos os jogadores remotos conectados em 3D no mapa!
+    if (network.connected) {
+      for (const rp of network.remotePlayerList) {
+        const aspect = getEntityRelativeAspect(rp.x, rp.y, rp.angle, player.x, player.y);
+        const isBack = aspect !== 'front';
+        let spriteName = isBack ? `${rp.skin}_back_idle` : `${rp.skin}_idle`;
+        if (aspect === 'back_left' && assets.get(`${rp.skin}_back_left`)) {
+          spriteName = `${rp.skin}_back_left`;
+        } else if (aspect === 'back_right' && assets.get(`${rp.skin}_back_right`)) {
+          spriteName = `${rp.skin}_back_right`;
         }
-        billboards.push({
-          x: rp.x,
-          y: rp.y,
-          texture: tex,
-          scale,
-          vOffset: 0,
-          tintRed: rp.hurtTimer > 0,
-        });
+
+        if (rp.state === 'dead' || rp.health <= 0) {
+          spriteName = `${rp.skin}_dead`;
+        } else if (rp.hurtTimer > 0) {
+          spriteName = `${rp.skin}_hurt`;
+        } else if (rp.attackTimer > 0) {
+          spriteName = `${rp.skin}_attack`;
+        } else if (rp.state === 'walk') {
+          const frame = Math.floor(Date.now() / 150) % 4;
+          spriteName = isBack ? `${rp.skin}_back_walk${frame + 1}` : `${rp.skin}_walk${frame + 1}`;
+        }
+
+        const tex = assets.get(spriteName)
+          || (isBack ? (assets.get(`${rp.skin}_back_idle`) || assets.get(`${rp.skin}_idle`)) : undefined)
+          || assets.get(`${rp.skin}_idle`)
+          || assets.get('bot02_idle')
+          || assets.get('enemy_imp');
+
+        if (tex) {
+          let scale = assets.scale(spriteName, IMP.scale);
+          if (rp.state === 'dead' || rp.health <= 0) {
+            scale *= 0.55;
+          }
+          billboards.push({
+            x: rp.x,
+            y: rp.y,
+            texture: tex,
+            scale,
+            vOffset: 0,
+            tintRed: rp.hurtTimer > 0,
+          });
+        }
       }
     }
 
     // Renderiza os bots
     for (const e of enemies.list) {
-      let spriteName = `${e.skin}_idle`;
+      const botAngle = e.angle ?? 0;
+      const aspect = getEntityRelativeAspect(e.x, e.y, botAngle, player.x, player.y);
+      const isBack = aspect !== 'front';
+      let spriteName = isBack ? `${e.skin}_back_idle` : `${e.skin}_idle`;
+      if (aspect === 'back_left' && assets.get(`${e.skin}_back_left`)) {
+        spriteName = `${e.skin}_back_left`;
+      } else if (aspect === 'back_right' && assets.get(`${e.skin}_back_right`)) {
+        spriteName = `${e.skin}_back_right`;
+      }
+
       if (e.state === 'dead') {
         spriteName = `${e.skin}_dead`;
       } else if (e.hurtTimer > 0) {
@@ -753,10 +929,13 @@ async function main(): Promise<void> {
         spriteName = `${e.skin}_attack`;
       } else if (e.state === 'chase') {
         const frame = Math.floor(e.animTime * 5) % 4;
-        spriteName = `${e.skin}_walk${frame + 1}`;
+        spriteName = isBack ? `${e.skin}_back_walk${frame + 1}` : `${e.skin}_walk${frame + 1}`;
       }
 
-      let tex = assets.get(spriteName) || assets.get(`${e.skin}_idle`) || assets.get('enemy_imp');
+      const tex = assets.get(spriteName)
+        || (isBack ? (assets.get(`${e.skin}_back_idle`) || assets.get(`${e.skin}_idle`)) : undefined)
+        || assets.get(`${e.skin}_idle`)
+        || assets.get('enemy_imp');
       if (!tex) continue;
 
       let scale = assets.scale(spriteName, IMP.scale);
@@ -780,17 +959,17 @@ async function main(): Promise<void> {
 
     ctx.putImageData(view, 0, 0);
 
-    const remoteInfo = (network.connected && network.remotePlayer)
-      ? {
-          x: network.remotePlayer.x,
-          y: network.remotePlayer.y,
-          angle: network.remotePlayer.angle,
-          name: network.remotePlayer.name,
-          health: network.remotePlayer.health,
-          frags: network.remotePlayer.frags,
-          dead: network.remotePlayer.state === 'dead' || network.remotePlayer.health <= 0,
-        }
-      : null;
+    const remoteInfoList = network.connected
+      ? network.remotePlayerList.map((rp) => ({
+          id: rp.id,
+          x: rp.x,
+          y: rp.y,
+          angle: rp.angle,
+          name: rp.name,
+          frags: rp.frags,
+          dead: rp.state === 'dead' || rp.health <= 0,
+        }))
+      : [];
 
     hud.draw({
       player,
@@ -803,7 +982,8 @@ async function main(): Promise<void> {
       gameMode,
       playerName,
       killFeed,
-      remotePlayer: remoteInfo,
+      remotePlayers: remoteInfoList,
+      spottedPings: Array.from(spottedPings.values()),
       respawnCountdown,
       spawnShieldTimer,
     });

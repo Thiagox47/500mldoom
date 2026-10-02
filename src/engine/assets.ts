@@ -10,9 +10,9 @@ export class Assets {
   private custom = new Set<string>();
 
   async load(): Promise<void> {
-    this.put('wall1', canvasTexture(paintBlocks(16, 8, '#8a4a32', '#3c2820')));
-    this.put('wall2', canvasTexture(paintBlocks(32, 16, '#6e7276', '#3a3d40')));
-    this.put('wall3', canvasTexture(paintTech));
+    this.put('wall1', canvasTexture(paintDustSandstone));
+    this.put('wall2', canvasTexture(paintDustCrates));
+    this.put('wall3', canvasTexture(paintDustDoors));
     this.put('enemy_imp', canvasTexture(paintImp));
     this.put('item_health', canvasTexture(paintHealth));
     this.put('item_ammo', canvasTexture(paintAmmo));
@@ -116,20 +116,56 @@ function paintBlocks(bw: number, bh: number, base: string, mortar: string): (ctx
   };
 }
 
-function paintTech(ctx: CanvasRenderingContext2D): void {
-  ctx.fillStyle = '#232a2e';
+function paintDustSandstone(ctx: CanvasRenderingContext2D): void {
+  // Parede de tijolos de arenito/adobe estilo Dust 2
+  paintBlocks(16, 10, '#c7a76d', '#6e5635')(ctx);
+}
+
+function paintDustCrates(ctx: CanvasRenderingContext2D): void {
+  // Caixas de madeira clássicas do CS / Doom com reforço diagonal
+  ctx.fillStyle = '#3c2411';
   ctx.fillRect(0, 0, 64, 64);
-  ctx.fillStyle = '#2c353a';
-  ctx.fillRect(2, 2, 28, 28);
-  ctx.fillRect(34, 2, 28, 28);
-  ctx.fillRect(2, 34, 28, 28);
-  ctx.fillRect(34, 34, 28, 28);
-  ctx.fillStyle = '#1f8f5f';
-  ctx.fillRect(0, 30, 64, 3);
-  ctx.fillStyle = '#4a5652';
+  ctx.fillStyle = '#7a4e28';
+  ctx.fillRect(2, 2, 60, 60);
+  ctx.fillStyle = '#9e6737';
+  ctx.fillRect(5, 5, 54, 54);
+  // Tábuas de madeira
+  ctx.fillStyle = '#82542a';
+  ctx.fillRect(5, 20, 54, 2);
+  ctx.fillRect(5, 42, 54, 2);
+  // Vigas diagonais
+  ctx.strokeStyle = '#5a3416';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(6, 6);
+  ctx.lineTo(58, 58);
+  ctx.moveTo(58, 6);
+  ctx.lineTo(6, 58);
+  ctx.stroke();
+  // Moldura metálica
+  ctx.strokeStyle = '#3c2411';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(5, 5, 54, 54);
+  noise(ctx, 180);
+}
+
+function paintDustDoors(ctx: CanvasRenderingContext2D): void {
+  // Portas duplas de metal e madeira com batentes e rebites
+  ctx.fillStyle = '#42372c';
+  ctx.fillRect(0, 0, 64, 64);
+  ctx.fillStyle = '#615344';
+  ctx.fillRect(3, 3, 27, 58);
+  ctx.fillRect(34, 3, 27, 58);
+  ctx.fillStyle = '#2b231b';
+  ctx.fillRect(30, 0, 4, 64);
+  ctx.fillStyle = '#a68758';
+  ctx.fillRect(25, 28, 5, 8);
+  ctx.fillRect(34, 28, 5, 8);
+  // Rebites
+  ctx.fillStyle = '#8a7761';
   const rivets = [
-    [6, 6], [26, 6], [38, 6], [58, 6],
-    [6, 58], [26, 58], [38, 58], [58, 58],
+    [8, 8], [22, 8], [39, 8], [53, 8],
+    [8, 54], [22, 54], [39, 54], [53, 54],
   ];
   for (const [x, y] of rivets) ctx.fillRect(x - 1, y - 1, 3, 3);
   noise(ctx, 160);

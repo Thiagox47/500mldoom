@@ -24,8 +24,10 @@ export interface EnemyDef {
 export type GameMode = 'single' | 'multiplayer';
 
 export interface Enemy {
+  id?: string;
   x: number;
   y: number;
+  angle?: number;
   health: number;
   speed: number;
   state: EnemyState;

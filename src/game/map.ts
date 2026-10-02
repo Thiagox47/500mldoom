@@ -1,32 +1,44 @@
-export const MAP_W = 24;
-export const MAP_H = 24;
+export const MAP_W = 32;
+export const MAP_H = 32;
 
-// 1 = tijolo, 2 = pedra, 3 = painel tecnologico
+// Mapa inspirado em de_dust2_doom:
+// 1 = Parede de arenito/adobe (Dust 2 Sandstone)
+// 2 = Caixas de suprimento de madeira (Dust 2 Crates)
+// 3 = Portas Duplas / Batentes de madeira e metal (Dust 2 Double Doors)
+// . = Chão de areia e poeira
 const MAP_STR: string[] = [
-  '111111111111111111111111',
-  '1......................1',
-  '1.22................22.1',
-  '1.22.......33.......22.1',
-  '1..........33..........1',
-  '1......................1',
-  '1..222222....222222....1',
-  '1......................1',
-  '1..22..............22..1',
-  '1..22..............22..1',
-  '1......................1',
-  '1....1............1....1',
-  '1....1............1....1',
-  '1......................1',
-  '1..222222....222222....1',
-  '1.........2..2.........1',
-  '1.........2..2.........1',
-  '1.........2..2.........1',
-  '1......................1',
-  '1......................1',
-  '1.........1..1.........1',
-  '1.........1..1.........1',
-  '1.........1..1.........1',
-  '111111111111111111111111',
+  '11111111111111111111111111111111',
+  '11111111111111111111111111111111',
+  '11........11........11......2.11',
+  '11........33........11......2.11',
+  '11..22..............11..22....11',
+  '11..22..................22....11',
+  '11........3311................11',
+  '11........1111................11',
+  '11........1111................11',
+  '111....1111111.........11.....11',
+  '111....1111111....1111111.....11',
+  '111....1111111....1111111.....11',
+  '111....1111111....1111111.....11',
+  '111....1111111....1111111.....11',
+  '111....1111111....1111111.....11',
+  '111....1111113....3111111.....11',
+  '111....1111113....3111111.....11',
+  '111...........11111111111.....11',
+  '111...........11111111111.....11',
+  '111....1111111....1111111.....11',
+  '111....1111111....1111111.....11',
+  '111....1111111....1111113....311',
+  '111....1111111....1111113....311',
+  '111....1111111....111111......11',
+  '111....1111111....111111......11',
+  '111....1111111....111111......11',
+  '11............................11',
+  '11............................11',
+  '11............................11',
+  '11111111111111111111111111111111',
+  '11111111111111111111111111111111',
+  '11111111111111111111111111111111',
 ];
 
 export const FLOOR_TILES: { x: number; y: number }[] = (() => {
@@ -81,35 +93,48 @@ export interface SpawnPoint {
   angle: number;
 }
 
-export const PLAYER_SPAWN: SpawnPoint = { x: 12.0, y: 18.5, angle: -Math.PI / 2 };
-export const SPAWN_HOST: SpawnPoint = { x: 12.0, y: 18.5, angle: -Math.PI / 2 };
-export const SPAWN_CLIENT: SpawnPoint = { x: 12.0, y: 1.8, angle: Math.PI / 2 };
+// Spawns característicos de Dust 2:
+export const PLAYER_SPAWN: SpawnPoint = { x: 16.0, y: 27.5, angle: -Math.PI / 2 }; // T-Spawn
+export const SPAWN_HOST: SpawnPoint = { x: 16.0, y: 27.5, angle: -Math.PI / 2 };   // T-Spawn
+export const SPAWN_CLIENT: SpawnPoint = { x: 16.0, y: 3.5, angle: Math.PI / 2 };    // CT-Spawn
 
 export const DEATHMATCH_SPAWNS: SpawnPoint[] = [
-  { x: 12.0, y: 18.5, angle: -Math.PI / 2 },
-  { x: 12.0, y: 1.8, angle: Math.PI / 2 },
-  { x: 3.5, y: 10.5, angle: 0 },
-  { x: 20.5, y: 10.5, angle: Math.PI },
-  { x: 12.0, y: 7.5, angle: Math.PI / 2 },
-  { x: 12.0, y: 13.5, angle: -Math.PI / 2 },
+  { x: 16.0, y: 27.5, angle: -Math.PI / 2 }, // Base TR
+  { x: 16.0, y: 3.5, angle: Math.PI / 2 },    // Base CT
+  { x: 26.5, y: 4.5, angle: Math.PI },        // Bombsite A
+  { x: 5.5, y: 3.5, angle: 0 },               // Bombsite B
+  { x: 27.0, y: 14.5, angle: -Math.PI / 2 },  // Long A (Rua)
+  { x: 15.5, y: 11.5, angle: Math.PI / 2 },   // Meio (CT Mid)
+  { x: 4.5, y: 13.5, angle: -Math.PI / 2 },   // Túneis Altos B
+  { x: 26.5, y: 24.5, angle: -Math.PI / 2 },  // Fora do Longo
+  { x: 20.0, y: 7.5, angle: 0 },              // Catwalk / Varanda A
+  { x: 10.0, y: 17.5, angle: 0 },             // Túnel Baixo para Meio
 ];
 
 export const ENEMY_SPAWNS: { x: number; y: number }[] = [
-  { x: 12.0, y: 7.5 },
-  { x: 6.5, y: 10.5 },
-  { x: 17.5, y: 10.5 },
-  { x: 5.5, y: 2.5 },
-  { x: 18.5, y: 2.5 },
-  { x: 12.0, y: 16.5 },
+  { x: 5.5, y: 3.5 },   // Bombsite B
+  { x: 26.5, y: 4.5 },  // Bombsite A
+  { x: 17.5, y: 3.5 },  // Base CT
+  { x: 15.5, y: 11.5 }, // Meio CT
+  { x: 27.0, y: 12.5 }, // Long A
+  { x: 4.5, y: 11.5 },  // Túnel Alto B
+  { x: 19.5, y: 6.5 },  // Varanda A
+  { x: 15.5, y: 23.5 }, // Meio Sul (Suicide)
 ];
 
 export const ITEM_SPAWNS: { x: number; y: number; type: 'health' | 'ammo' }[] = [
-  { x: 4.5, y: 7.5, type: 'health' },
-  { x: 19.5, y: 7.5, type: 'health' },
-  { x: 6.5, y: 1.5, type: 'health' },
-  { x: 12.0, y: 5.5, type: 'ammo' },
-  { x: 17.5, y: 1.5, type: 'ammo' },
-  { x: 7.5, y: 12.5, type: 'ammo' },
-  { x: 12.0, y: 10.5, type: 'ammo' },
+  // Health Kits
+  { x: 3.5, y: 3.5, type: 'health' },   // Bombsite B
+  { x: 27.5, y: 3.5, type: 'health' },  // Bombsite A (Goose)
+  { x: 13.5, y: 3.5, type: 'health' },  // Base CT
+  { x: 14.5, y: 27.5, type: 'health' }, // Base TR
+  { x: 27.5, y: 19.5, type: 'health' }, // Long A (Pit)
+  { x: 8.5, y: 17.5, type: 'health' },  // Túnel Baixo
+  // Munições
+  { x: 15.5, y: 14.5, type: 'ammo' },   // Portas do Meio
+  { x: 26.5, y: 20.5, type: 'ammo' },   // Portas do Longo
+  { x: 4.5, y: 15.5, type: 'ammo' },    // Túnel Alto
+  { x: 20.5, y: 8.5, type: 'ammo' },    // Catwalk
+  { x: 27.5, y: 24.5, type: 'ammo' },   // Fora do Longo
+  { x: 15.5, y: 22.5, type: 'ammo' },   // Meio Sul
 ];
-

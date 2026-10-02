@@ -36,6 +36,7 @@ export class Enemies {
         name: BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)],
         frags: 0,
         animTime: Math.random() * 10,
+        angle: Math.random() * Math.PI * 2,
       });
     }
   }
@@ -110,6 +111,7 @@ export class Enemies {
 
       const dx = targetX - e.x;
       const dy = targetY - e.y;
+      e.angle = Math.atan2(dy, dx);
 
       if (e.state === 'chase') {
         e.cooldown -= dt;

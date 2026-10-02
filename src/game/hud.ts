@@ -10,12 +10,20 @@ export interface KillFeedItem {
 }
 
 export interface RemotePlayerHudInfo {
+  id?: string;
   x: number;
   y: number;
   angle: number;
   name: string;
   frags: number;
   dead: boolean;
+}
+
+export interface SpottedPing {
+  id: string;
+  x: number;
+  y: number;
+  timer: number;
 }
 
 export interface HudInfo {
@@ -29,7 +37,8 @@ export interface HudInfo {
   gameMode?: 'single' | 'multiplayer';
   playerName?: string;
   killFeed?: KillFeedItem[];
-  remotePlayer?: RemotePlayerHudInfo | null;
+  remotePlayers?: RemotePlayerHudInfo[];
+  spottedPings?: SpottedPing[];
   respawnCountdown?: number;
   spawnShieldTimer?: number;
 }
@@ -272,15 +281,22 @@ export class Hud {
 
   private drawMinimap(info: HudInfo): void {
     const ctx = this.ctx;
-    const s = 4;
+    const s = 3;
     const mx = 12;
     const my = 12;
-    ctx.fillStyle = 'rgba(10, 12, 16, 0.55)';
+    ctx.fillStyle = 'rgba(15, 13, 10, 0.70)';
     ctx.fillRect(mx - 3, my - 3, MAP_W * s + 6, MAP_H * s + 6);
     for (let ty = 0; ty < MAP_H; ty++) {
       for (let tx = 0; tx < MAP_W; tx++) {
-        if (tileAt(tx, ty) !== '.') {
-          ctx.fillStyle = '#3c4148';
+        const t = tileAt(tx, ty);
+        if (t !== '.') {
+          if (t === '2') {
+            ctx.fillStyle = '#a16207'; // Caixas
+          } else if (t === '3') {
+            ctx.fillStyle = '#c2410c'; // Portas Duplas
+          } else {
+            ctx.fillStyle = '#6b573d'; // Paredes de Arenito
+          }
           ctx.fillRect(mx + tx * s, my + ty * s, s, s);
         }
       }
@@ -290,26 +306,36 @@ export class Hud {
       ctx.fillStyle = item.type === 'health' ? '#3ec25e' : '#d8b93c';
       ctx.fillRect(mx + item.x * s - 1.5, my + item.y * s - 1.5, 3, 3);
     }
-    for (const e of info.enemies) {
-      if (e.state === 'dead') continue;
-      ctx.fillStyle = '#d03040';
-      ctx.fillRect(mx + e.x * s - 1.5, my + e.y * s - 1.5, 3, 3);
+    // Ponto vermelho temporário (some após 3 segundos) quando outro jogador/inimigo entra no campo de visão (FOV)
+    if (info.spottedPings && info.spottedPings.length > 0) {
+      for (const ping of info.spottedPings) {
+        if (ping.timer <= 0) continue;
+        const px = mx + ping.x * s;
+        const py = my + ping.y * s;
+        const alpha = Math.min(1, ping.timer / 0.4);
+
+        ctx.save();
+        // Halo de alerta vermelho suave
+        ctx.fillStyle = `rgba(239, 68, 68, ${alpha * 0.35})`;
+        ctx.beginPath();
+        ctx.arc(px, py, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Ponto vermelho nítido no radar
+        ctx.fillStyle = `rgba(255, 30, 30, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Ponto central branco de destaque
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.9})`;
+        ctx.beginPath();
+        ctx.arc(px, py, 1, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
     }
-    // Remote Player no minimapa
-    if (info.remotePlayer && !info.remotePlayer.dead) {
-      const rp = info.remotePlayer;
-      ctx.save();
-      ctx.translate(mx + rp.x * s, my + rp.y * s);
-      ctx.rotate(rp.angle);
-      ctx.fillStyle = '#00e5ff';
-      ctx.beginPath();
-      ctx.moveTo(6, 0);
-      ctx.lineTo(-3, -3);
-      ctx.lineTo(-3, 3);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-    }
+
     const p = info.player;
     ctx.save();
     ctx.translate(mx + p.x * s, my + p.y * s);
@@ -359,7 +385,9 @@ export class Hud {
     const playerName = info.playerName || 'Você';
     const leaders = [
       { name: playerName, frags: info.kills, isPlayer: true, isFriend: false },
-      ...(info.remotePlayer ? [{ name: info.remotePlayer.name, frags: info.remotePlayer.frags, isPlayer: false, isFriend: true }] : []),
+      ...(info.remotePlayers
+        ? info.remotePlayers.map((rp) => ({ name: rp.name, frags: rp.frags, isPlayer: false, isFriend: true }))
+        : []),
       ...info.enemies
         .filter((e) => e.name)
         .slice(0, 3)

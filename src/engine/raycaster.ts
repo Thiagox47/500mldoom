@@ -106,6 +106,80 @@ export function lineOfSight(x0: number, y0: number, x1: number, y1: number): boo
   return false;
 }
 
+export function isEntityInFov(
+  px: number,
+  py: number,
+  pAngle: number,
+  tx: number,
+  ty: number,
+  maxDist = 22,
+): boolean {
+  const dx = tx - px;
+  const dy = ty - py;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 0.25) return true;
+  if (dist > maxDist) return false;
+
+  const angleToTarget = Math.atan2(dy, dx);
+  let diff = angleToTarget - pAngle;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  while (diff > Math.PI) diff -= Math.PI * 2;
+  if (Math.abs(diff) > 0.65) return false;
+
+  return lineOfSight(px, py, tx, ty);
+}
+
+export type EntityAspect = 'front' | 'back' | 'back_left' | 'back_right';
+
+export function getEntityRelativeAspect(
+  targetX: number,
+  targetY: number,
+  targetAngle: number,
+  viewerX: number,
+  viewerY: number,
+): EntityAspect {
+  const dx = viewerX - targetX;
+  const dy = viewerY - targetY;
+  const angleToViewer = Math.atan2(dy, dx);
+
+  let diff = angleToViewer - targetAngle;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  while (diff > Math.PI) diff -= Math.PI * 2;
+
+  // Se a diferença angular for menor que ~65° (1.13 rad), estamos de frente para a entidade
+  if (Math.abs(diff) < 1.13) {
+    return 'front';
+  }
+
+  // Se estiver quase diretamente atrás (~158° a 180°)
+  if (Math.abs(diff) > 2.75) {
+    return 'back';
+  }
+
+  // diff > 0 significa que o observador está à direita da entidade (vendo costas/lado direito)
+  // diff < 0 significa que o observador está à esquerda da entidade (vendo costas/lado esquerdo)
+  return diff > 0 ? 'back_right' : 'back_left';
+}
+
+export function isEntityFacingAway(
+  targetX: number,
+  targetY: number,
+  targetAngle: number,
+  viewerX: number,
+  viewerY: number,
+): boolean {
+  const dx = viewerX - targetX;
+  const dy = viewerY - targetY;
+  const angleToViewer = Math.atan2(dy, dx);
+
+  let diff = angleToViewer - targetAngle;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  while (diff > Math.PI) diff -= Math.PI * 2;
+
+  // |diff| >= 65° (~1.13 rad) significa que o observador está vendo a entidade de lado ou de costas
+  return Math.abs(diff) >= 1.13;
+}
+
 function fillRow(buf: Uint8ClampedArray, W: number, y: number, r: number, g: number, b: number): void {
   let o = y * W * 4;
   for (let x = 0; x < W; x++) {
@@ -119,13 +193,15 @@ function fillRow(buf: Uint8ClampedArray, W: number, y: number, r: number, g: num
 
 export function renderFloorCeiling(buf: Uint8ClampedArray, W: number, H: number): void {
   const half = H >> 1;
+  // Céu árido / deserto estilo Dust 2 (azul com névoa quente no horizonte)
   for (let y = 0; y < half; y++) {
     const t = y / half;
-    fillRow(buf, W, y, 6 + 30 * t, 6 + 32 * t, 10 + 36 * t);
+    fillRow(buf, W, y, 90 + 55 * t, 135 + 45 * t, 185 + 35 * t);
   }
+  // Chão de poeira e areia batida estilo Dust 2
   for (let y = half; y < H; y++) {
     const t = (y - half) / (H - half);
-    fillRow(buf, W, y, 52 - 30 * t, 48 - 28 * t, 44 - 25 * t);
+    fillRow(buf, W, y, 140 - 50 * t, 120 - 45 * t, 85 - 35 * t);
   }
 }
 
