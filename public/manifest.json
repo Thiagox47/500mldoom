@@ -22,6 +22,15 @@
     { "name": "botpadrao_walk4", "file": "sprites/botpadrao/walk4.png" },
     { "name": "botpadrao_attack", "file": "sprites/botpadrao/attack.png" },
     { "name": "botpadrao_hurt", "file": "sprites/botpadrao/hurt.png" },
-    { "name": "botpadrao_dead", "file": "sprites/botpadrao/dead.png" }
+    { "name": "botpadrao_dead", "file": "sprites/botpadrao/dead.png" },
+
+    { "name": "bot02_idle", "file": "sprites/bot02/idle.png" },
+    { "name": "bot02_walk1", "file": "sprites/bot02/walk1.png" },
+    { "name": "bot02_walk2", "file": "sprites/bot02/walk2.png" },
+    { "name": "bot02_walk3", "file": "sprites/bot02/walk3.png" },
+    { "name": "bot02_walk4", "file": "sprites/bot02/walk4.png" },
+    { "name": "bot02_attack", "file": "sprites/bot02/attack.png" },
+    { "name": "bot02_hurt", "file": "sprites/bot02/hurt.png" },
+    { "name": "bot02_dead", "file": "sprites/bot02/dead.png" }
   ]
 }

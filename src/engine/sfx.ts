@@ -77,4 +77,12 @@ export class Sfx {
     this.tone(320, 0.35, 'sawtooth', 0.26, 50);
     this.noise(0.25, 0.3, 600);
   }
+
+  menuSelect(): void {
+    this.tone(680, 0.035, 'square', 0.08);
+  }
+
+  menuConfirm(): void {
+    this.tone(380, 0.06, 'sawtooth', 0.14, 820);
+  }
 }

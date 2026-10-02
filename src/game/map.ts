@@ -75,23 +75,41 @@ export function moveWithCollision(obj: { x: number; y: number }, dx: number, dy:
   if (!circleHits(obj.x, obj.y + dy, r)) obj.y += dy;
 }
 
-export const PLAYER_SPAWN = { x: 12, y: 21.5, angle: -Math.PI / 2 };
+export interface SpawnPoint {
+  x: number;
+  y: number;
+  angle: number;
+}
+
+export const PLAYER_SPAWN: SpawnPoint = { x: 12.0, y: 18.5, angle: -Math.PI / 2 };
+export const SPAWN_HOST: SpawnPoint = { x: 12.0, y: 18.5, angle: -Math.PI / 2 };
+export const SPAWN_CLIENT: SpawnPoint = { x: 12.0, y: 1.8, angle: Math.PI / 2 };
+
+export const DEATHMATCH_SPAWNS: SpawnPoint[] = [
+  { x: 12.0, y: 18.5, angle: -Math.PI / 2 },
+  { x: 12.0, y: 1.8, angle: Math.PI / 2 },
+  { x: 3.5, y: 10.5, angle: 0 },
+  { x: 20.5, y: 10.5, angle: Math.PI },
+  { x: 12.0, y: 7.5, angle: Math.PI / 2 },
+  { x: 12.0, y: 13.5, angle: -Math.PI / 2 },
+];
 
 export const ENEMY_SPAWNS: { x: number; y: number }[] = [
-  { x: 12, y: 8.5 },
-  { x: 5.5, y: 10.5 },
-  { x: 17, y: 12.5 },
-  { x: 4, y: 2.5 },
-  { x: 19, y: 3.5 },
-  { x: 12, y: 16.5 },
+  { x: 12.0, y: 7.5 },
+  { x: 6.5, y: 10.5 },
+  { x: 17.5, y: 10.5 },
+  { x: 5.5, y: 2.5 },
+  { x: 18.5, y: 2.5 },
+  { x: 12.0, y: 16.5 },
 ];
 
 export const ITEM_SPAWNS: { x: number; y: number; type: 'health' | 'ammo' }[] = [
-  { x: 4, y: 7.5, type: 'health' },
-  { x: 19, y: 7.5, type: 'health' },
-  { x: 2, y: 1.5, type: 'health' },
-  { x: 12, y: 6.5, type: 'ammo' },
-  { x: 21, y: 1.5, type: 'ammo' },
-  { x: 6, y: 12.5, type: 'ammo' },
-  { x: 12, y: 19.5, type: 'ammo' },
+  { x: 4.5, y: 7.5, type: 'health' },
+  { x: 19.5, y: 7.5, type: 'health' },
+  { x: 6.5, y: 1.5, type: 'health' },
+  { x: 12.0, y: 5.5, type: 'ammo' },
+  { x: 17.5, y: 1.5, type: 'ammo' },
+  { x: 7.5, y: 12.5, type: 'ammo' },
+  { x: 12.0, y: 10.5, type: 'ammo' },
 ];
+

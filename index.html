@@ -3,39 +3,370 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Protótipo Doom — 500ml Stories</title>
+    <title>500ml Stories — Retro Doom FPS</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      html, body { height: 100%; background: #0a0b0d; overflow: hidden; }
-      body { display: flex; align-items: center; justify-content: center; font-family: 'Courier New', monospace; }
-      #wrap { position: relative; width: min(96vw, calc(96vh * 1.6)); }
+      html, body { height: 100%; background: #060709; overflow: hidden; }
+      body {
+        display: flex; align-items: center; justify-content: center;
+        font-family: 'Courier New', monospace;
+      }
+      #wrap {
+        position: relative;
+        width: min(96vw, calc(96vh * 1.6));
+      }
       canvas {
         display: block; width: 100%; height: auto;
         image-rendering: pixelated; background: #000;
-        border: 1px solid #22262c; box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
+        border: 2px solid #252830;
+        box-shadow: 0 0 50px rgba(0, 0, 0, 0.9), 0 0 20px rgba(180, 20, 20, 0.2);
       }
+      
+      /* Menu Overlay */
       #overlay {
-        position: absolute; inset: 0; display: flex; flex-direction: column;
-        align-items: center; justify-content: center; gap: 14px;
-        background: rgba(8, 9, 12, 0.82); color: #d8d8d2;
-        text-align: center; cursor: pointer; user-select: none;
+        position: absolute; inset: 0;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        background: radial-gradient(circle at center, rgba(14, 16, 22, 0.88) 0%, rgba(6, 7, 10, 0.96) 100%);
+        color: #d8d8d2; user-select: none; z-index: 10;
+        backdrop-filter: blur(3px);
       }
-      #overlay h1 { font-size: clamp(22px, 4vw, 42px); letter-spacing: 6px; color: #c8342c; text-transform: uppercase; }
-      #overlay p { color: #9aa0aa; font-size: 14px; letter-spacing: 1px; }
-      #overlay .keys { color: #d8d8d2; }
-      #overlay-hint { margin-top: 10px; color: #e8c23c; animation: pulse 1.2s infinite; }
-      @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+      .menu-screen {
+        display: none; flex-direction: column; align-items: center; justify-content: center;
+        width: 100%; max-width: 520px; padding: 20px; text-align: center; gap: 14px;
+        animation: fadeIn 0.15s ease-out;
+      }
+      .menu-screen.active { display: flex; }
+
+      @keyframes fadeIn {
+        from { opacity: 0; transform: scale(0.98); }
+        to { opacity: 1; transform: scale(1); }
+      }
+
+      /* Logo / Header */
+      .game-title {
+        font-size: clamp(26px, 4.2vw, 44px);
+        letter-spacing: 5px;
+        color: #e63946;
+        text-transform: uppercase;
+        font-weight: 900;
+        text-shadow: 0 0 10px rgba(230, 57, 70, 0.8), 2px 3px 0 #4a0d12;
+        margin-bottom: 2px;
+      }
+      .game-subtitle {
+        color: #f1faee;
+        font-size: clamp(11px, 1.8vw, 13px);
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        opacity: 0.8;
+      }
+      .version-badge {
+        font-size: 10px;
+        padding: 2px 8px;
+        background: #1d212a;
+        color: #e8c23c;
+        border: 1px solid #3d4554;
+        border-radius: 3px;
+        letter-spacing: 1px;
+      }
+
+      /* Buttons */
+      .menu-btns {
+        display: flex; flex-direction: column; gap: 10px;
+        width: 100%; max-width: 340px; margin-top: 6px;
+      }
+      .btn {
+        appearance: none;
+        background: linear-gradient(180deg, #262a33 0%, #17191f 100%);
+        color: #e5e7eb;
+        border: 2px solid #3f4654;
+        padding: 10px 18px;
+        font-family: inherit;
+        font-size: clamp(12px, 1.9vw, 14px);
+        font-weight: bold;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        cursor: pointer;
+        display: flex; align-items: center; justify-content: center; gap: 8px;
+        transition: all 0.12s ease-in-out;
+        box-shadow: 0 3px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+        text-decoration: none;
+      }
+      .btn:hover {
+        background: linear-gradient(180deg, #c8342c 0%, #851c16 100%);
+        border-color: #ff554a;
+        color: #ffffff;
+        box-shadow: 0 0 14px rgba(200, 52, 44, 0.6), inset 0 1px 0 rgba(255,255,255,0.25);
+        transform: translateY(-1px);
+      }
+      .btn:active {
+        transform: translateY(1px);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.6);
+      }
+      .btn-primary {
+        background: linear-gradient(180deg, #b92b23 0%, #70140f 100%);
+        border-color: #e63946;
+      }
+      .btn-secondary {
+        border-color: #4a5568;
+        color: #cbd5e1;
+      }
+
+      /* Form Fields */
+      .field-group {
+        display: flex; flex-direction: column; gap: 6px;
+        width: 100%; max-width: 340px; text-align: left;
+      }
+      .field-label {
+        font-size: 11px; color: #e8c23c; letter-spacing: 1px; font-weight: bold;
+      }
+      .field-input {
+        background: #0f1117;
+        border: 1px solid #383e4c;
+        color: #f3f4f6;
+        padding: 8px 12px;
+        font-family: inherit;
+        font-size: 14px;
+        border-radius: 2px;
+        outline: none;
+        transition: border-color 0.15s;
+      }
+      .field-input:focus {
+        border-color: #e63946;
+        box-shadow: 0 0 8px rgba(230, 57, 70, 0.4);
+      }
+
+      /* Cards & Info */
+      .info-box {
+        background: rgba(20, 24, 32, 0.7);
+        border: 1px solid #2d3340;
+        padding: 12px; border-radius: 4px;
+        font-size: 11px; line-height: 1.5; color: #9ca3af;
+        max-width: 380px; text-align: left;
+      }
+      .controls-table {
+        width: 100%; max-width: 380px;
+        font-size: 12px; text-align: left;
+        border-collapse: collapse; margin-top: 4px;
+      }
+      .controls-table td {
+        padding: 6px 10px; border-bottom: 1px solid #20242e;
+      }
+      .controls-table td.key {
+        color: #e8c23c; font-weight: bold; width: 45%;
+      }
+      .controls-table td.desc {
+        color: #d1d5db;
+      }
+
+      /* Footer status */
+      .menu-footer {
+        font-size: 10px; color: #6b7280; letter-spacing: 1px;
+        margin-top: 10px;
+      }
+
+      /* Multiplayer P2P Components */
+      .mp-tabs {
+        display: flex; gap: 8px; width: 100%; max-width: 380px; margin-top: 2px;
+      }
+      .tab-btn {
+        flex: 1; padding: 7px 4px; font-family: inherit; font-size: 11px; font-weight: bold;
+        letter-spacing: 1px; text-transform: uppercase; background: #161820; color: #9ca3af;
+        border: 1px solid #323846; cursor: pointer; transition: all 0.12s;
+      }
+      .tab-btn:hover { color: #f3f4f6; border-color: #4b5563; }
+      .tab-btn.active {
+        background: #2a1618; color: #ff554a; border-color: #e63946;
+      }
+      .tab-panel {
+        display: none; width: 100%; max-width: 380px; flex-direction: column; gap: 8px;
+        background: rgba(18, 21, 29, 0.75); border: 1px solid #2d3340; padding: 12px;
+        border-radius: 4px;
+      }
+      .tab-panel.active { display: flex; }
+      .code-input {
+        text-align: center; font-size: 16px; letter-spacing: 3px; font-weight: bold; text-transform: uppercase;
+        color: #e8c23c;
+      }
+      .room-display {
+        display: flex; flex-direction: column; align-items: center; gap: 4px;
+      }
+      .room-code {
+        font-size: 22px; font-weight: 900; letter-spacing: 4px; color: #e8c23c;
+        text-shadow: 0 0 10px rgba(232, 194, 60, 0.5);
+      }
+      .btn-sm {
+        padding: 6px 12px; font-size: 11px; width: auto; letter-spacing: 1px;
+      }
+      .status-msg {
+        font-size: 11px; color: #9ca3af; animation: pulse 1.2s infinite; text-align: center;
+      }
+      .status-alert {
+        font-size: 11px; padding: 6px 10px; border-radius: 3px; text-align: center; width: 100%; max-width: 380px;
+        background: #1e293b; border: 1px solid #334155; color: #cbd5e1;
+      }
     </style>
   </head>
   <body>
     <div id="wrap">
       <canvas id="game" width="640" height="400"></canvas>
+
+      <div id="click-to-focus-banner" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 5; background: rgba(14, 16, 22, 0.92); border: 2px solid #e8c23c; color: #f3f4f6; padding: 14px 24px; font-weight: bold; font-size: 13px; text-transform: uppercase; letter-spacing: 2px; border-radius: 4px; box-shadow: 0 0 25px rgba(0,0,0,0.85); cursor: pointer; text-align: center;">
+        🎮 CLIQUE NA TELA PARA JOGAR
+      </div>
+
       <div id="overlay">
-        <h1 id="overlay-title">Protótipo Doom</h1>
-        <p class="keys">WASD mover &nbsp;·&nbsp; Mouse mirar &nbsp;·&nbsp; Clique atirar &nbsp;·&nbsp; M minimapa</p>
-        <p id="overlay-hint">Clique para começar</p>
+        <!-- 1. TELA PRINCIPAL (MAIN MENU) -->
+        <div id="screen-main" class="menu-screen active">
+          <div class="version-badge">DOOM ENGINE · 500ML</div>
+          <h1 class="game-title">500ml Stories</h1>
+          <p class="game-subtitle">Retro Raycaster FPS</p>
+
+          <div class="menu-btns">
+            <button id="btn-start-single" class="btn btn-primary">
+              ⚔️ Single Player
+            </button>
+            <button id="btn-open-multiplayer" class="btn">
+              🌐 Multiplayer
+            </button>
+            <button id="btn-open-controls" class="btn btn-secondary">
+              ❓ Controles
+            </button>
+          </div>
+
+          <p class="menu-footer">WASD · Mouse Mirar · Clique Disparar · ESC Menu</p>
+        </div>
+
+        <!-- 2. TELA MULTIPLAYER COM CÓDIGO DE SALA P2P -->
+        <div id="screen-multiplayer" class="menu-screen">
+          <div class="version-badge">DEATHMATCH ONLINE P2P</div>
+          <h1 class="game-title" style="font-size: clamp(20px, 3.2vw, 30px);">Multiplayer P2P</h1>
+          
+          <div style="display: flex; gap: 10px; width: 100%; max-width: 380px;">
+            <div class="field-group" style="flex: 1;">
+              <label class="field-label" for="mp-player-name">SEU APELIDO:</label>
+              <input type="text" id="mp-player-name" class="field-input" value="Jogador_500ml" maxlength="15" />
+            </div>
+            <div class="field-group" style="width: 140px;">
+              <label class="field-label" for="mp-player-skin">SUA SKIN:</label>
+              <select id="mp-player-skin" class="field-input" style="height: 35px; cursor: pointer;">
+                <option value="bot02">Bege Armado</option>
+                <option value="bot01">Jairo</option>
+                <option value="botpadrao">Zombie</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field-group" style="width: 100%; max-width: 380px;">
+            <label class="field-label" for="mp-bot-mode">MODO DE COMBATE:</label>
+            <select id="mp-bot-mode" class="field-input" style="height: 35px; cursor: pointer;">
+              <option value="duel" selected>⚔️ Duelo 1v1 Puro (Sem Bots - Recomendado)</option>
+              <option value="bots2">🤖 Duelo 1v1 + 2 Bots</option>
+              <option value="bots5">💀 Caos Total (5 Bots)</option>
+            </select>
+          </div>
+
+          <!-- Abas Entrar / Criar Sala -->
+          <div class="mp-tabs">
+
+            <button id="tab-join" class="tab-btn active">Entrar com Código</button>
+            <button id="tab-create" class="tab-btn">Criar Sala</button>
+          </div>
+
+          <!-- Painel Entrar com Código -->
+          <div id="panel-join" class="tab-panel active">
+            <div class="field-group" style="max-width: 100%;">
+              <label class="field-label" for="mp-join-code">CÓDIGO DA SALA DO SEU AMIGO:</label>
+              <input type="text" id="mp-join-code" class="field-input code-input" placeholder="EX: 7K9A" maxlength="10" />
+            </div>
+            <button id="btn-connect-room" class="btn btn-primary" style="margin-top: 4px;">
+              🚀 Conectar e Jogar
+            </button>
+          </div>
+
+          <!-- Painel Criar Sala -->
+          <div id="panel-create" class="tab-panel">
+            <div class="room-display">
+              <div style="font-size: 11px; color: #9ca3af;">CÓDIGO DA SUA SALA:</div>
+              <div id="mp-host-code" class="room-code">GERANDO...</div>
+              <button id="btn-copy-link" class="btn btn-secondary btn-sm" type="button">📋 Copiar Link de Convite</button>
+            </div>
+            <div id="mp-host-status" class="status-msg">⏳ Aguardando seu amigo conectar...</div>
+            <button id="btn-host-enter" class="btn btn-primary" style="display: none; margin-top: 6px; animation: pulse 1s infinite;">
+              ⚔️ Entrar na Partida com Amigo
+            </button>
+          </div>
+
+          <div id="mp-status-alert" class="status-alert" style="display: none;"></div>
+
+          <div class="menu-btns" style="margin-top: 4px;">
+            <button id="btn-play-offline-bots" class="btn" style="font-size: 11px; padding: 7px;">
+              🤖 Treinar Solo (Apenas Bots)
+            </button>
+            <button id="btn-back-to-main-from-mp" class="btn btn-secondary" style="font-size: 11px; padding: 7px;">
+              ⬅️ Voltar ao Menu
+            </button>
+          </div>
+        </div>
+
+        <!-- 3. TELA DE PAUSA -->
+        <div id="screen-pause" class="menu-screen">
+          <div class="version-badge" id="pause-mode-badge">PARTIDA EM ANDAMENTO</div>
+          <h1 class="game-title" style="color: #e8c23c; text-shadow: 0 0 10px rgba(232, 194, 60, 0.6);">Pausado</h1>
+          <p id="pause-stats" style="font-size: 13px; color: #cbd5e1;">Kills: 0 · Vida: 100%</p>
+
+          <div class="menu-btns">
+            <button id="btn-resume-game" class="btn btn-primary">
+              ▶️ Continuar
+            </button>
+            <button id="btn-restart-game" class="btn">
+              🔄 Reiniciar Partida
+            </button>
+            <button id="btn-quit-to-main" class="btn btn-secondary">
+              🏠 Menu Principal
+            </button>
+          </div>
+        </div>
+
+        <!-- 4. TELA DE FIM DE JOGO (GAMEOVER) -->
+        <div id="screen-gameover" class="menu-screen">
+          <div class="version-badge" style="color: #f87171; border-color: #7f1d1d;">ELIMINADO</div>
+          <h1 class="game-title" style="color: #ef4444; text-shadow: 0 0 12px rgba(239, 68, 68, 0.8);">Você Morreu</h1>
+          <p id="gameover-stats" style="font-size: 14px; color: #fca5a5;">Frags conquistados: 0</p>
+
+          <div class="menu-btns">
+            <button id="btn-respawn-game" class="btn btn-primary">
+              ⚡ Renascer / Reiniciar
+            </button>
+            <button id="btn-gameover-to-main" class="btn btn-secondary">
+              🏠 Menu Principal
+            </button>
+          </div>
+        </div>
+
+        <!-- 5. TELA DE CONTROLES -->
+        <div id="screen-controls" class="menu-screen">
+          <div class="version-badge">GUIA DE COMANDOS</div>
+          <h1 class="game-title" style="font-size: clamp(20px, 3.2vw, 30px); color: #e8c23c;">Controles</h1>
+
+          <table class="controls-table">
+            <tr><td class="key">W, A, S, D</td><td class="desc">Mover personagem</td></tr>
+            <tr><td class="key">Mouse</td><td class="desc">Girar e mirar câmera</td></tr>
+            <tr><td class="key">Clique Esquerdo</td><td class="desc">Disparar arma</td></tr>
+            <tr><td class="key">Tecla M</td><td class="desc">Alternar minimapa</td></tr>
+            <tr><td class="key">Tecla ESC</td><td class="desc">Pausar / Abrir Menu</td></tr>
+          </table>
+
+          <div class="menu-btns" style="margin-top: 10px;">
+            <button id="btn-back-to-main-from-controls" class="btn btn-secondary">
+              ⬅️ Voltar
+            </button>
+          </div>
+        </div>
       </div>
     </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

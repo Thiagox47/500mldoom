@@ -23,15 +23,18 @@ export class Spawner {
     this.itemTimer = ITEM_INTERVAL;
   }
 
-  update(dt: number, player: Player, def: EnemyDef): void {
-    this.enemyTimer -= dt;
-    if (this.enemyTimer <= 0) {
-      this.enemyTimer = SPAWN_INTERVAL;
-      if (this.enemies.aliveCount < MAX_ALIVE) {
-        const spot = pickSpot(player, this.enemies.list, MIN_ENEMY_DIST, true);
-        if (spot) this.enemies.spawnOne(spot.x, spot.y, def);
+  update(dt: number, player: Player, def: EnemyDef, maxEnemies = MAX_ALIVE): void {
+    if (maxEnemies > 0) {
+      this.enemyTimer -= dt;
+      if (this.enemyTimer <= 0) {
+        this.enemyTimer = SPAWN_INTERVAL;
+        if (this.enemies.aliveCount < maxEnemies) {
+          const spot = pickSpot(player, this.enemies.list, MIN_ENEMY_DIST, true);
+          if (spot) this.enemies.spawnOne(spot.x, spot.y, def);
+        }
       }
     }
+
 
     this.itemTimer -= dt;
     if (this.itemTimer <= 0) {

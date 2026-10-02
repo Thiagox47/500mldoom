@@ -6,7 +6,8 @@ import type { Enemy, EnemyDef } from '../types';
 export const IMP: EnemyDef = { health: 60, speed: 1.7, damage: 9, scale: 0.78, attackRange: 1.4 };
 
 const RADIUS = 0.25;
-const BOT_SKINS = ['botpadrao', 'bot01']; // Skins ativas no modo mata-mata
+const BOT_SKINS = ['botpadrao', 'bot01', 'bot02']; // Skins ativas no modo mata-mata
+const BOT_NAMES = ['Jairo_500ml', 'Carlinhos_Sniper', 'Caveira_BR', 'Vitor_Doom', 'Chico_Bala', 'NoobSlayer', 'Capitao_Nox', 'Rei_do_Gole'];
 
 export class Enemies {
   list: Enemy[] = [];
@@ -32,6 +33,8 @@ export class Enemies {
         cooldown: 0,
         deathTimer: 0,
         skin: BOT_SKINS[Math.floor(Math.random() * BOT_SKINS.length)],
+        name: BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)],
+        frags: 0,
         animTime: Math.random() * 10,
       });
     }
@@ -42,7 +45,14 @@ export class Enemies {
     this.spawn(spawns, def);
   }
 
-  update(dt: number, player: Player, def: EnemyDef, onHitPlayer: (dmg: number) => void): void {
+  update(
+    dt: number,
+    player: Player,
+    def: EnemyDef,
+    onHitPlayer: (dmg: number) => void,
+    isDeathmatch = false,
+    onBotKillBot?: (killer: Enemy, victim: Enemy) => void,
+  ): void {
     for (const e of this.list) {
       e.animTime += dt;
       if (e.state === 'dead') {
@@ -51,34 +61,95 @@ export class Enemies {
       }
       if (e.hurtTimer > 0) e.hurtTimer -= dt;
 
-      const dx = player.x - e.x;
-      const dy = player.y - e.y;
-      const dist = Math.hypot(dx, dy);
+      // Selecao de alvo: Player ou outro Bot
+      let targetX = player.x;
+      let targetY = player.y;
+      let targetDist = Math.hypot(player.x - e.x, player.y - e.y);
+      let targetIsPlayer = true;
+
+      if (isDeathmatch) {
+        // Se ja tem um bot alvo vivo e proximo, mantem foco
+        if (e.targetBot && e.targetBot.state !== 'dead') {
+          const d = Math.hypot(e.targetBot.x - e.x, e.targetBot.y - e.y);
+          if (d < 14 && lineOfSight(e.x, e.y, e.targetBot.x, e.targetBot.y)) {
+            targetX = e.targetBot.x;
+            targetY = e.targetBot.y;
+            targetDist = d;
+            targetIsPlayer = false;
+          } else {
+            e.targetBot = null;
+          }
+        }
+
+        // Se nao tem alvo fixo, busca o combatente mais proximo
+        if (!e.targetBot) {
+          let bestDist = (!player.dead && lineOfSight(e.x, e.y, player.x, player.y)) ? targetDist : 999;
+
+          for (const other of this.list) {
+            if (other === e || other.state === 'dead') continue;
+            const d = Math.hypot(other.x - e.x, other.y - e.y);
+            if (d < bestDist && d < 12 && lineOfSight(e.x, e.y, other.x, other.y)) {
+              bestDist = d;
+              e.targetBot = other;
+              targetX = other.x;
+              targetY = other.y;
+              targetDist = d;
+              targetIsPlayer = false;
+            }
+          }
+        }
+      }
 
       if (e.state === 'idle') {
-        if (!player.dead && dist < 11 && lineOfSight(e.x, e.y, player.x, player.y)) e.state = 'chase';
+        const canSee = targetIsPlayer
+          ? (!player.dead && targetDist < 12 && lineOfSight(e.x, e.y, player.x, player.y))
+          : (e.targetBot && e.targetBot.state !== 'dead' && targetDist < 12);
+        if (canSee) e.state = 'chase';
         continue;
       }
 
+      const dx = targetX - e.x;
+      const dy = targetY - e.y;
+
       if (e.state === 'chase') {
         e.cooldown -= dt;
-        if (dist < def.attackRange && e.cooldown <= 0) {
+        if (targetDist < def.attackRange && e.cooldown <= 0) {
           e.state = 'attack';
           e.attackTimer = 0.45;
           continue;
         }
-        if (dist > 0.35) {
+        if (targetDist > 0.35) {
           const sp = e.speed * dt;
-          moveWithCollision(e, (dx / dist) * sp, (dy / dist) * sp, RADIUS);
+          moveWithCollision(e, (dx / targetDist) * sp, (dy / targetDist) * sp, RADIUS);
         }
       } else if (e.state === 'attack') {
         e.attackTimer -= dt;
         if (e.attackTimer <= 0) {
-          if (!player.dead && dist < def.attackRange + 0.3 && lineOfSight(e.x, e.y, player.x, player.y)) {
-            onHitPlayer(def.damage + Math.random() * 4);
+          if (targetIsPlayer) {
+            if (!player.dead && targetDist < def.attackRange + 0.3 && lineOfSight(e.x, e.y, player.x, player.y)) {
+              onHitPlayer(def.damage + Math.random() * 4);
+            }
+          } else if (e.targetBot && e.targetBot.state !== 'dead') {
+            const currentDist = Math.hypot(e.targetBot.x - e.x, e.targetBot.y - e.y);
+            if (currentDist < def.attackRange + 0.4 && lineOfSight(e.x, e.y, e.targetBot.x, e.targetBot.y)) {
+              const dmg = def.damage + Math.random() * 8;
+              e.targetBot.health -= dmg;
+              e.targetBot.hurtTimer = 0.2;
+              // O bot atingido revida focando no atacante
+              if (!e.targetBot.targetBot) e.targetBot.targetBot = e;
+              if (e.targetBot.state === 'idle') e.targetBot.state = 'chase';
+
+              if (e.targetBot.health <= 0) {
+                e.targetBot.state = 'dead';
+                e.targetBot.deathTimer = 0.5;
+                e.frags = (e.frags || 0) + 1;
+                if (onBotKillBot) onBotKillBot(e, e.targetBot);
+                e.targetBot = null;
+              }
+            }
           }
           e.state = 'chase';
-          e.cooldown = 0.8;
+          e.cooldown = 0.7 + Math.random() * 0.4;
         }
       }
     }

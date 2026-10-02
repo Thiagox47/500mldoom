@@ -21,6 +21,8 @@ export interface EnemyDef {
   attackRange: number;
 }
 
+export type GameMode = 'single' | 'multiplayer';
+
 export interface Enemy {
   x: number;
   y: number;
@@ -33,6 +35,9 @@ export interface Enemy {
   deathTimer: number;
   skin: string;
   animTime: number;
+  name?: string;
+  frags?: number;
+  targetBot?: Enemy | null;
 }
 
 export type ItemType = 'health' | 'ammo';
